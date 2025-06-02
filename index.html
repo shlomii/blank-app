@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Space Invaders</title>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  canvas.width = 800;
+  canvas.height = 600;
+
+  // Player
+  const player = {
+    width: 50,
+    height: 30,
+    x: canvas.width / 2 - 50 / 2,
+    y: canvas.height - 30 - 10,
+    color: 'green',
+    speed: 5
+  };
+
+  // Bullet Properties
+  const bulletProps = {
+    width: 5,
+    height: 10,
+    color: 'red',
+    speed: 7
+  };
+
+  // Bullets Array
+  const playerBullets = [];
+
+  // Invader Properties
+  const invaderProps = {
+    width: 40,
+    height: 30,
+    color: 'purple',
+    rows: 3,
+    cols: 8,
+    padding: 10,
+    offsetX: 30,
+    offsetY: 30,
+    speed: 2,
+    direction: 1 // 1 for right, -1 for left
+  };
+
+  // Invaders Array
+  const invaders = [];
+
+  // Invader Bullet Properties
+  const invaderBulletProps = {
+    width: 5,
+    height: 10,
+    color: 'yellow',
+    speed: 5,
+    fireRate: 0.002 // Chance per invader per frame
+  };
+
+  // Invader Bullets Array
+  const invaderBullets = [];
+
+  // Score
+  let score = 0;
+  let gameOver = false;
+  let gameWon = false;
+
+  // Create Invaders Function
+  function createInvaders() {
+    for (let r = 0; r < invaderProps.rows; r++) {
+      for (let c = 0; c < invaderProps.cols; c++) {
+        invaders.push({
+          x: invaderProps.offsetX + c * (invaderProps.width + invaderProps.padding),
+          y: invaderProps.offsetY + r * (invaderProps.height + invaderProps.padding),
+          width: invaderProps.width,
+          height: invaderProps.height,
+          color: invaderProps.color
+        });
+      }
+    }
+  }
+  createInvaders(); // Populate the invaders array
+
+  // Draw Player
+  function drawPlayer(p) {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.width, p.height);
+  }
+
+  // Draw Bullet
+  function drawBullet(b) {
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x, b.y, b.width, b.height);
+  }
+
+  // Draw Invader
+  function drawInvader(inv) {
+    ctx.fillStyle = inv.color;
+    ctx.fillRect(inv.x, inv.y, inv.width, inv.height);
+  }
+
+  // Draw Invader Bullet
+  function drawInvaderBullet(b) {
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x, b.y, b.width, b.height);
+  }
+
+  // AABB Collision Detection Function
+  function checkCollision(rect1, rect2) {
+    return rect1.x < rect2.x + rect2.width &&
+           rect1.x + rect1.width > rect2.x &&
+           rect1.y < rect2.y + rect2.height &&
+           rect1.y + rect1.height > rect2.y;
+  }
+
+  // Draw Score
+  function drawScore() {
+    ctx.fillStyle = "white";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 10, 25);
+  }
+
+  // Keyboard State
+  let leftArrowPressed = false;
+  let rightArrowPressed = false;
+
+  // Event Listeners
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') {
+      leftArrowPressed = true;
+    } else if (event.key === 'ArrowRight') {
+      rightArrowPressed = true;
+    } else if (event.code === 'Space' && !gameOver && !gameWon) { // Allow shooting only if game is active
+      const newBullet = {
+        x: player.x + player.width / 2 - bulletProps.width / 2,
+        y: player.y,
+        width: bulletProps.width,
+        height: bulletProps.height,
+        color: bulletProps.color,
+        speed: bulletProps.speed
+      };
+      playerBullets.push(newBullet);
+    } else if ((gameOver || gameWon) && event.key.toLowerCase() === 'r') {
+      restartGame();
+    }
+  });
+
+  document.addEventListener('keyup', (event) => {
+    if (event.key === 'ArrowLeft') {
+      leftArrowPressed = false;
+    } else if (event.key === 'ArrowRight') {
+      rightArrowPressed = false;
+    }
+  });
+
+  // Update Player
+  function updatePlayer() {
+    if (leftArrowPressed) {
+      player.x -= player.speed;
+    }
+    if (rightArrowPressed) {
+      player.x += player.speed;
+    }
+
+    // Boundary checks
+    if (player.x < 0) {
+      player.x = 0;
+    }
+    if (player.x + player.width > canvas.width) {
+      player.x = canvas.width - player.width;
+    }
+  }
+
+  // Game Loop
+  function gameLoop() {
+    if (gameOver) {
+      ctx.fillStyle = 'black'; // Clear with background color
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "red";
+      ctx.font = "40px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 40);
+      ctx.font = "20px Arial";
+      ctx.fillText("Press R to Restart", canvas.width / 2, canvas.height / 2 + 20);
+      ctx.textAlign = "left"; // Reset alignment
+      return; // Stop the game logic
+    }
+    if (gameWon) {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "green";
+      ctx.font = "40px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2 - 40);
+      ctx.font = "20px Arial";
+      ctx.fillText("Press R to Restart", canvas.width / 2, canvas.height / 2 + 20);
+      ctx.textAlign = "left";
+      return;
+    }
+
+    // --- UPDATE GAME STATE ---
+
+    // Update Player
+    updatePlayer();
+
+    // Update Invaders (includes movement, player collision check, and shooting)
+    updateInvaders();
+
+    // Update Player Bullets (movement, collision with invaders, off-screen removal)
+    for (let i = playerBullets.length - 1; i >= 0; i--) {
+      const bullet = playerBullets[i];
+      bullet.y -= bulletProps.speed; // Assuming bulletProps was intended for player bullet speed as well
+      let bulletRemoved = false;
+
+      for (let j = invaders.length - 1; j >= 0; j--) {
+        const invader = invaders[j];
+        if (checkCollision(bullet, invader)) {
+          playerBullets.splice(i, 1);
+          invaders.splice(j, 1);
+          score += 10;
+          // console.log("Score: ", score); // For debugging
+          bulletRemoved = true;
+          break; 
+        }
+      }
+
+      if (!bulletRemoved && (bullet.y + bulletProps.height < 0)) { // Check bulletProps.height too
+        playerBullets.splice(i, 1);
+      }
+    }
+
+    // Update Invader Bullets (movement, collision with player, off-screen removal)
+    for (let i = invaderBullets.length - 1; i >= 0; i--) {
+      const iBullet = invaderBullets[i];
+      iBullet.y += invaderBulletProps.speed;
+
+      if (checkCollision(iBullet, player)) {
+        invaderBullets.splice(i, 1);
+        gameOver = true; 
+      } else if (iBullet.y > canvas.height) {
+        invaderBullets.splice(i, 1);
+      }
+    }
+    
+    // Check for win condition
+    if (invaders.length === 0 && !gameOver) {
+        gameWon = true;
+    }
+
+    // --- CLEAR CANVAS AND DRAW EVERYTHING ---
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    drawScore();
+    drawPlayer(player);
+
+    playerBullets.forEach(bullet => drawBullet(bullet));
+    invaders.forEach(invader => drawInvader(invader));
+    invaderBullets.forEach(iBullet => drawInvaderBullet(iBullet));
+    
+    // Next frame
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Update Invaders Function
+  function updateInvaders() {
+    let moveDown = false;
+    for (let i = invaders.length - 1; i >= 0; i--) {
+      const invader = invaders[i];
+      invader.x += invaderProps.speed * invaderProps.direction;
+
+      // Check collision with player
+      if (checkCollision(invader, player)) {
+        gameOver = true;
+      }
+
+      if (invader.x + invader.width > canvas.width || invader.x < 0) {
+        moveDown = true;
+      }
+
+      // Invader Shooting Logic
+      if (Math.random() < invaderBulletProps.fireRate) {
+        invaderBullets.push({
+          x: invader.x + invader.width / 2 - invaderBulletProps.width / 2,
+          y: invader.y + invader.height,
+          width: invaderBulletProps.width,
+          height: invaderBulletProps.height,
+          color: invaderBulletProps.color,
+          speed: invaderBulletProps.speed
+        });
+      }
+    }
+
+    if (moveDown) {
+      invaderProps.direction *= -1;
+      for (const inv of invaders) { // Changed variable name to avoid conflict
+        inv.y += inv.height; // Move down by one invader height
+        if (inv.y + inv.height >= player.y) { // Check if invaders reached player level
+            gameOver = true;
+        }
+      }
+    }
+  }
+
+  function restartGame() {
+    score = 0;
+    gameOver = false;
+    gameWon = false;
+
+    player.x = canvas.width / 2 - player.width / 2;
+    player.y = canvas.height - player.height - 10;
+    
+    leftArrowPressed = false; // Reset key states
+    rightArrowPressed = false;
+
+    playerBullets.length = 0;
+    invaderBullets.length = 0;
+    invaders.length = 0; 
+
+    invaderProps.direction = 1; 
+    // Reset invader Y positions too if they moved down a lot
+    // This is handled by createInvaders re-calculating positions based on initial offsetY
+
+    createInvaders(); 
+
+    gameLoop(); 
+  }
+
+  // Start Game
+  gameLoop();
+</script>
+</body>
+</html>
