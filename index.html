@@ -63,6 +63,9 @@
   // Invader Bullets Array
   const invaderBullets = [];
 
+  // Explosion Effects Array
+  const explosions = [];
+
   // Score
   let score = 0;
   let gameOver = false;
@@ -106,6 +109,21 @@
   function drawInvaderBullet(b) {
     ctx.fillStyle = b.color;
     ctx.fillRect(b.x, b.y, b.width, b.height);
+  }
+
+  // Draw Explosion Effect
+  function drawExplosion(ex) {
+    ctx.save();
+    ctx.globalAlpha = ex.alpha;
+    ctx.strokeStyle = 'orange';
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, ex.radius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function createExplosion(x, y) {
+    explosions.push({ x, y, radius: 0, alpha: 1 });
   }
 
   // AABB Collision Detection Function
@@ -174,6 +192,18 @@
     }
   }
 
+  // Update and fade out explosions
+  function updateExplosions() {
+    for (let i = explosions.length - 1; i >= 0; i--) {
+      const ex = explosions[i];
+      ex.radius += 2;
+      ex.alpha -= 0.1;
+      if (ex.alpha <= 0) {
+        explosions.splice(i, 1);
+      }
+    }
+  }
+
   // Game Loop
   function gameLoop() {
     if (gameOver) {
@@ -219,13 +249,15 @@
         const invader = invaders[j];
         if (checkCollision(bullet, invader)) {
           invaders.splice(j, 1);
+          createExplosion(invader.x + invader.width / 2, invader.y + invader.height / 2);
           score += 1000000;
           // console.log("Score: ", score); // For debugging
           bulletRemoved = true;
+          break;
         }
       }
 
-      if (!bulletRemoved && (bullet.y + bulletProps.height < 0)) { // Check bulletProps.height too
+      if (bulletRemoved || bullet.y + bulletProps.height < 0) { // Remove if hit or off screen
         playerBullets.splice(i, 1);
       }
     }
@@ -242,6 +274,9 @@
         invaderBullets.splice(i, 1);
       }
     }
+
+    // Update explosion animations
+    updateExplosions();
     
     // Check for win condition
     if (invaders.length === 0 && !gameOver) {
@@ -259,6 +294,7 @@
     playerBullets.forEach(bullet => drawBullet(bullet));
     invaders.forEach(invader => drawInvader(invader));
     invaderBullets.forEach(iBullet => drawInvaderBullet(iBullet));
+    explosions.forEach(ex => drawExplosion(ex));
     
     // Next frame
     requestAnimationFrame(gameLoop);
@@ -317,7 +353,8 @@
 
     playerBullets.length = 0;
     invaderBullets.length = 0;
-    invaders.length = 0; 
+    invaders.length = 0;
+    explosions.length = 0;
 
     invaderProps.direction = 1; 
     // Reset invader Y positions too if they moved down a lot
